@@ -10,6 +10,6 @@ export class CardNewsService {
   ) {}
 
   async createFromNews(newsItems: NewsEntity[]): Promise<CardNewsEntity[]> {
-    throw new Error('Not implemented');
+    return this.createCardNewsUseCase.execute(newsItems);
   }
 }

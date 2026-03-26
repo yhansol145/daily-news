@@ -9,7 +9,7 @@ export class FetchDailyNewsUseCase {
     private readonly newsFetcher: NewsFetcherPort,
   ) {}
 
-  async execute(category?: string): Promise<NewsEntity[]> {
-    throw new Error('Not implemented');
+  async execute(category: string): Promise<NewsEntity[]> {
+    return this.newsFetcher.fetchDailyNews(category);
   }
 }
