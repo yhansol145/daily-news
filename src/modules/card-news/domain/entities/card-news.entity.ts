@@ -1,9 +1,10 @@
 export class CardNewsEntity {
-  id: string;
+  headlineQuote: string;
   title: string;
-  summary: string;
-  imageUrl?: string;
+  bullets: string[];
+  imageUrl: string;
   sourceUrl: string;
   category: string;
+  number: number;
   createdAt: Date;
 }
