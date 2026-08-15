@@ -7,8 +7,8 @@ export interface CardNewsContent {
   imagePrompt: string;
 }
 
-export interface ClaudePort {
+export interface LlmPort {
   generateCardNewsContent(news: NewsEntity): Promise<CardNewsContent>;
 }
 
-export const CLAUDE_PORT = Symbol('CLAUDE_PORT');
+export const LLM_PORT = Symbol('LLM_PORT');

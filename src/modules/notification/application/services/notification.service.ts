@@ -9,6 +9,6 @@ export class NotificationService {
   ) {}
 
   async sendDailyNews(cardNewsItems: CardNewsEntity[]): Promise<void> {
-    throw new Error('Not implemented');
+    return this.sendNotificationUseCase.execute(cardNewsItems);
   }
 }
