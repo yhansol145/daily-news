@@ -23,3 +23,7 @@ npm-debug.log*
 *.sln
 *.sw?
 node_modules
+
+# 생성물 (카드뉴스 이미지 / 일자별 저장 데이터)
+/public/images
+/data

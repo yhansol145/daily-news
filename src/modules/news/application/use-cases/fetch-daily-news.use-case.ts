@@ -1,6 +1,9 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { NewsEntity } from '../../domain/entities/news.entity';
-import { NewsFetcherPort, NEWS_FETCHER_PORT } from '../../domain/ports/news-fetcher.port';
+import {
+  NewsFetcherPort,
+  NEWS_FETCHER_PORT,
+} from '../../domain/ports/news-fetcher.port';
 
 @Injectable()
 export class FetchDailyNewsUseCase {
