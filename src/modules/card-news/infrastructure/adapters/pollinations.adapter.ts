@@ -1,47 +1,96 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { writeFile, mkdir } from 'fs/promises';
-import { existsSync } from 'fs';
-import { join } from 'path';
+import { createHash } from 'crypto';
 import { ImageGeneratorPort } from '../../domain/ports/image-generator.port';
+import { ImageStorage } from '../image-storage';
+import { retry } from '../../../../common/utils/retry';
+import { describeError } from '../../../../common/utils/error';
 
+const API_BASE = 'https://image.pollinations.ai/prompt';
+const DEFAULT_SIZE = 1024;
+const DEFAULT_RETRY_DELAY_MS = 4000;
+const STYLE_SUFFIX =
+  'webtoon illustration style, vibrant colors, Korean news card';
+
+/**
+ * Pollinations 이미지 생성. API 키가 필요 없다.
+ *
+ * 기본 동작(POLLINATIONS_DIRECT_URL=true)은 pollinations.ai 의 공개 이미지 URL 을
+ * 그대로 반환한다. 카카오 서버가 이미지를 직접 가져가므로, 서비스가 공개 도메인에
+ * 배포되기 전에도 메시지에 이미지를 넣을 수 있다.
+ */
 @Injectable()
 export class PollinationsAdapter implements ImageGeneratorPort {
-  private readonly apiUrl =
-    'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell';
-  private readonly imagesDir = join(process.cwd(), 'public', 'images');
+  private readonly logger = new Logger(PollinationsAdapter.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly imageStorage: ImageStorage,
+  ) {}
 
   async generate(prompt: string): Promise<string> {
-    const token = this.configService.getOrThrow<string>('HF_TOKEN');
+    const url = this.buildUrl(prompt);
 
-    const response = await fetch(this.apiUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        inputs: `${prompt}, webtoon illustration style, vibrant colors, Korean news card`,
-      }),
+    // 요청을 한 번 보내 생성을 끝내둔다.
+    // 이렇게 캐시를 데워두지 않으면 카카오가 URL 을 가져갈 때 생성 대기로 타임아웃될 수 있다.
+    //
+    // 무료 티어라 429/500 이 잦으므로 다른 어댑터보다 넉넉하게 기다린다. (기본 4s → 8s → 16s)
+    const buffer = await retry(() => this.requestImage(url), {
+      retries: 3,
+      delayMs: this.configService.get<number>(
+        'POLLINATIONS_RETRY_DELAY_MS',
+        DEFAULT_RETRY_DELAY_MS,
+      ),
+      onRetry: (error, attempt) =>
+        this.logger.warn(
+          `이미지 생성 재시도 ${attempt}회: ${describeError(error)}`,
+        ),
     });
 
+    if (this.isDirectUrlMode()) {
+      return url;
+    }
+
+    return this.imageStorage.save(buffer);
+  }
+
+  private isDirectUrlMode(): boolean {
+    return (
+      String(
+        this.configService.get<string>('POLLINATIONS_DIRECT_URL', 'true'),
+      ) !== 'false'
+    );
+  }
+
+  private buildUrl(prompt: string): string {
+    const size = this.configService.get<number>(
+      'POLLINATIONS_IMAGE_SIZE',
+      DEFAULT_SIZE,
+    );
+    const decorated = `${prompt}, ${STYLE_SUFFIX}`;
+
+    // 같은 프롬프트는 항상 같은 이미지가 되도록 seed 를 고정한다.
+    // (카카오가 URL 을 다시 가져가도 이미지가 바뀌지 않는다)
+    const seed = parseInt(
+      createHash('sha1').update(decorated).digest('hex').slice(0, 8),
+      16,
+    );
+
+    return (
+      `${API_BASE}/${encodeURIComponent(decorated)}` +
+      `?width=${size}&height=${size}&nologo=true&seed=${seed}`
+    );
+  }
+
+  private async requestImage(url: string): Promise<Buffer> {
+    const response = await fetch(url);
+
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`HuggingFace API error: ${response.status} ${error}`);
+      throw new Error(
+        `Pollinations API 오류: ${response.status} ${response.statusText}`,
+      );
     }
 
-    const buffer = Buffer.from(await response.arrayBuffer());
-
-    if (!existsSync(this.imagesDir)) {
-      await mkdir(this.imagesDir, { recursive: true });
-    }
-
-    const filename = `${Date.now()}.jpg`;
-    await writeFile(join(this.imagesDir, filename), buffer);
-
-    const port = this.configService.get<number>('PORT', 3000);
-    return `http://localhost:${port}/images/${filename}`;
+    return Buffer.from(await response.arrayBuffer());
   }
 }

@@ -1,6 +1,9 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { CardNewsEntity } from '../../../card-news/domain/entities/card-news.entity';
-import { NotificationPort, NOTIFICATION_PORT } from '../../domain/ports/notification.port';
+import {
+  NotificationPort,
+  NOTIFICATION_PORT,
+} from '../../domain/ports/notification.port';
 
 @Injectable()
 export class SendNotificationUseCase {
@@ -10,6 +13,6 @@ export class SendNotificationUseCase {
   ) {}
 
   async execute(cardNewsItems: CardNewsEntity[]): Promise<void> {
-    throw new Error('Not implemented');
+    return this.notificationPort.send(cardNewsItems);
   }
 }
